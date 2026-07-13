@@ -144,6 +144,16 @@ bash examples/on_policy_distillation_trainer/\
 run_qwen2_5_0_5b_megatron.sh
 ```
 
+Choose `MAX_RESPONSE_LENGTH` for the task rather than treating the response
+clip ratio as a universal pass/fail threshold. OPD still supplies token-level
+supervision on the retained response prefix, and short mathematical tasks can
+often use a shorter limit than open-ended generation. Record the clip ratio
+and inspect clipped samples: a base student that repeats until the limit is
+different from a dataset whose valid answers genuinely require more context.
+Increase the limit only when the retained prefix omits useful task reasoning;
+otherwise prefer the shorter setting when it improves memory headroom and
+end-to-end throughput.
+
 For long runs, launch in a persistent terminal such as tmux and keep Ray's
 temporary directory, model caches, checkpoints, and logs on persistent storage.
 
