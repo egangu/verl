@@ -32,6 +32,18 @@ source /usr/local/Ascend/nnal/atb/set_env.sh
 
 Launch wrappers that enable Bash `nounset` (`set -u`) may need to disable it
 temporarily while sourcing vendor environment scripts, then enable it again.
+Some NNAL releases also append ATB example and test directories to
+`LD_LIBRARY_PATH`. If a Ray actor exits before processing its first request
+with an `ld.so` TLS-allocation assertion, keep the variables exported by the
+NNAL script but restrict the ATB library entry to its runtime directory:
+
+```bash
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
+cann_ld_library_path=$LD_LIBRARY_PATH
+source /usr/local/Ascend/nnal/atb/set_env.sh
+export LD_LIBRARY_PATH="$ATB_HOME_PATH/lib:$cann_ld_library_path"
+```
+
 Verify the runtime before allocating NPUs:
 
 ```bash
