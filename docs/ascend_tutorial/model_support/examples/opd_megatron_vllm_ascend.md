@@ -1,6 +1,6 @@
 # On-policy distillation with Megatron and vLLM Ascend
 
-Last updated: 07/13/2026.
+Last updated: 07/14/2026.
 
 This guide covers full-parameter on-policy distillation (OPD) on Ascend NPUs
 with Megatron training and vLLM Ascend inference. The canonical recipes are:
@@ -154,6 +154,43 @@ bash examples/on_policy_distillation_trainer/\
 run_qwen3_vl_4b_megatron.sh
 ```
 
+Qwen3-VL full-parameter training can use Megatron's CPU optimizer when the
+student pool has only one 64 GiB NPU. The following two-NPU topology assigns
+one NPU to the student/rollout pool and one to the teacher pool. Its sequence
+and token budgets are starting points for short-form multimodal reasoning, not
+portable defaults for every dataset:
+
+```bash
+NGPUS_PER_NODE=1 \
+TEACHER_NGPUS_PER_NODE=1 \
+ACTOR_TP=1 \
+ROLLOUT_TP=1 \
+TEACHER_TP=1 \
+TRAIN_BATCH_SIZE=12 \
+PPO_MINI_BATCH_SIZE=12 \
+MAX_PROMPT_LENGTH=512 \
+MAX_RESPONSE_LENGTH=512 \
+PPO_MAX_TOKEN_LEN_PER_GPU=4096 \
+ROLLOUT_GPU_MEMORY_UTILIZATION=0.25 \
+TEACHER_GPU_MEMORY_UTILIZATION=0.65 \
+OPTIMIZER_CPU_OFFLOAD=true \
+bash examples/on_policy_distillation_trainer/\
+run_qwen3_vl_4b_megatron.sh
+```
+
+`OPTIMIZER_CPU_OFFLOAD=true` selects Megatron's CPU-resident optimizer and
+defaults to a full offload fraction with the precision-aware optimizer. This
+still updates every model parameter; it changes optimizer-state placement,
+not the training scope. Override `OPTIMIZER_OFFLOAD_FRACTION` or
+`USE_PRECISION_AWARE_OPTIMIZER` only after validating the resulting optimizer
+state and memory use.
+
+This optimizer setting is different from
+`actor_rollout_ref.actor.megatron.optimizer_offload`. The latter moves
+already-created optimizer state between worker stages, but it cannot prevent
+the first optimizer step from allocating Adam state on the NPU. Use the CPU
+optimizer when that initial allocation is the memory bottleneck.
+
 Both recipes run 100 optimizer steps by default. Override paths and batch
 sizes with environment variables rather than editing the scripts:
 
@@ -168,15 +205,15 @@ bash examples/on_policy_distillation_trainer/\
 run_qwen2_5_0_5b_megatron.sh
 ```
 
-Choose `MAX_RESPONSE_LENGTH` for the task rather than treating the response
-clip ratio as a universal pass/fail threshold. OPD still supplies token-level
-supervision on the retained response prefix, and short mathematical tasks can
-often use a shorter limit than open-ended generation. Record the clip ratio
-and inspect clipped samples: a base student that repeats until the limit is
-different from a dataset whose valid answers genuinely require more context.
-Increase the limit only when the retained prefix omits useful task reasoning;
-otherwise prefer the shorter setting when it improves memory headroom and
-end-to-end throughput.
+Choose `MAX_RESPONSE_LENGTH` for the task. The response clip ratio is a
+diagnostic, not a universal quality or acceptance threshold: OPD still
+supplies token-level supervision on the retained response prefix, and short
+mathematical tasks can often use a shorter limit than open-ended generation.
+Record the ratio and inspect clipped samples. A base student that repeats until
+the limit is different from a dataset whose valid answers genuinely require
+more context. Increase the limit only when the retained prefix omits useful
+task reasoning; otherwise prefer the shorter setting when it improves memory
+headroom and end-to-end throughput.
 
 For long runs, launch in a persistent terminal such as tmux and keep Ray's
 temporary directory, model caches, checkpoints, and logs on persistent storage.
@@ -192,7 +229,10 @@ warmup before comparing throughput.
 3. Increase `PPO_MINI_BATCH_SIZE` while keeping it no larger than the train
    batch size.
 4. Raise `PPO_MAX_TOKEN_LEN_PER_GPU` until memory is well utilized, then reduce
-   it if long-tail batches cause out-of-memory failures.
+   it if long-tail batches cause out-of-memory failures. This budget controls
+   dynamic actor and log-probability microbatching independently of the global
+   train batch size, so reducing it can remove an activation or logits peak
+   without reducing rollout concurrency.
 5. Tune rollout and teacher memory utilization independently. Leave headroom
    for weight synchronization and multimodal preprocessing.
 6. Enable graph capture only after an eager run succeeds. Graph capture has a

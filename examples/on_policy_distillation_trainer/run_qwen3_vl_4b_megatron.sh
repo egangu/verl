@@ -20,6 +20,10 @@ MAX_PROMPT_LENGTH=${MAX_PROMPT_LENGTH:-1024}
 MAX_RESPONSE_LENGTH=${MAX_RESPONSE_LENGTH:-2048}
 PPO_MAX_TOKEN_LEN_PER_GPU=${PPO_MAX_TOKEN_LEN_PER_GPU:-16384}
 
+OPTIMIZER_CPU_OFFLOAD=${OPTIMIZER_CPU_OFFLOAD:-false}
+OPTIMIZER_OFFLOAD_FRACTION=${OPTIMIZER_OFFLOAD_FRACTION:-1.0}
+USE_PRECISION_AWARE_OPTIMIZER=${USE_PRECISION_AWARE_OPTIMIZER:-true}
+
 ACTOR_LR=${ACTOR_LR:-1e-6}
 ACTOR_TP=${ACTOR_TP:-2}
 ROLLOUT_TP=${ROLLOUT_TP:-2}
@@ -73,6 +77,14 @@ ACTOR=(
     actor_rollout_ref.actor.megatron.vanilla_mbridge=True
     actor_rollout_ref.actor.use_kl_loss=False
 )
+
+if [[ "$OPTIMIZER_CPU_OFFLOAD" == "true" ]]; then
+    ACTOR+=(
+        +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_cpu_offload=True
+        +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_offload_fraction="$OPTIMIZER_OFFLOAD_FRACTION"
+        +actor_rollout_ref.actor.optim.override_optimizer_config.use_precision_aware_optimizer="$USE_PRECISION_AWARE_OPTIMIZER"
+    )
+fi
 
 ROLLOUT=(
     actor_rollout_ref.rollout.name=vllm
