@@ -30,6 +30,7 @@ Last updated: 06/05/2026.
    model_support/examples/ascend_vllm_best_practices
    model_support/examples/dapo_multi_model_optimization_practice
    model_support/examples/gspo_optimization_practice
+   model_support/examples/opd_megatron_vllm_ascend
    model_support/examples/qwen3_5_megatron_npu
 
 .. toctree::

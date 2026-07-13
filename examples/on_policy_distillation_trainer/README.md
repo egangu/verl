@@ -16,6 +16,9 @@ This trainer jointly trains a student model with policy-gradient on-policy rollo
 Override `STUDENT_MODEL` and `TEACHER_MODEL` via env vars to swap model pairs in
 the single-teacher scripts. The MOPD script exposes per-teacher overrides.
 
+See the [Ascend Megatron + vLLM OPD guide](../../docs/ascend_tutorial/model_support/examples/opd_megatron_vllm_ascend.md)
+for dependency compatibility, four-NPU placement, validation, and tuning.
+
 ## Key Flags
 
 - `distillation.enabled=True`
