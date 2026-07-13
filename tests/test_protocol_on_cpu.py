@@ -1089,6 +1089,26 @@ def test_serialize_deserialize_tensordict_nested_tensors():
         assert orig.dtype == recon.dtype
 
 
+def test_maybe_fix_3d_position_ids_rebuilds_ragged_sequence_layout():
+    position_ids_row = torch.arange(700).expand(4, 700)
+    decoded_position_ids = torch.nested.as_nested_tensor([position_ids_row], layout=torch.jagged)
+    decoded = TensorDict({"position_ids": decoded_position_ids}, batch_size=(1,))
+    assert decoded["position_ids"].values().shape == torch.Size([4, 700])
+    assert decoded["position_ids"].offsets().tolist() == [0, 4]
+    assert decoded["position_ids"]._ragged_idx == 1
+
+    tu.maybe_fix_3d_position_ids(decoded)
+
+    fixed = decoded["position_ids"]
+    assert fixed.values().shape == torch.Size([4, 700])
+    assert fixed.offsets().tolist() == [0, 700]
+    assert fixed._ragged_idx == 2
+    assert torch.equal(fixed.unbind()[0], position_ids_row)
+
+    selected = tu.index_select_tensor_dict(decoded, torch.tensor([0]))
+    assert torch.equal(selected["position_ids"].unbind()[0], position_ids_row)
+
+
 def test_serialize_deserialize_tensordict_mixed_types():
     """Test serialization and deserialization of TensorDict with mixed tensor types"""
     # Create tensors with different data types

@@ -757,9 +757,9 @@ def postprocess_bshd_engine(
 def build_vlm_attn_mask_thd(input_ids: torch.Tensor, pad_token_id: int = None):
     input_ids_rmpad = input_ids.to_padded_tensor(pad_token_id)
 
-    if is_npu_available:
-        return input_ids_rmpad, None
-
+    # VLM bridges consume the 2D valid-token mask while building MRoPE
+    # position IDs and converting multimodal embeddings to THD. They clear it
+    # before calling the NPU language-model attention kernel.
     seqlens_in_batch = input_ids.offsets().diff()
     attention_mask = torch.zeros_like(input_ids_rmpad, dtype=torch.bool)
     for i, seqlen in enumerate(seqlens_in_batch):
