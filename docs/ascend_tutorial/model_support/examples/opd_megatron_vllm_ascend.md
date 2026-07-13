@@ -101,8 +101,9 @@ python examples/data_preprocess/geo3k.py \
   --local_save_dir "$HOME/data/geo3k"
 ```
 
-The resulting parquet files must contain the `images` column, and the
-referenced image paths must be visible from every Ray worker.
+The resulting parquet files must contain the `images` column. Images may be
+embedded in the parquet as bytes; if a dataset stores paths instead, those
+paths must be visible from every Ray worker.
 
 Hugging Face model IDs are the defaults. For an offline cluster, set
 `STUDENT_MODEL` and `TEACHER_MODEL` to local snapshot directories. ModelScope
@@ -120,6 +121,29 @@ ray stop --force
 bash examples/on_policy_distillation_trainer/\
 run_qwen2_5_0_5b_megatron.sh
 ```
+
+The recipe defaults use four NPUs (two for student/rollout and two for the
+teacher, TP=2 in each pool). A two-NPU TP=1 topology is also supported and is
+useful when the two pools must use one NPU each:
+
+```bash
+NGPUS_PER_NODE=1 \
+TEACHER_NGPUS_PER_NODE=1 \
+ACTOR_TP=1 \
+ROLLOUT_TP=1 \
+TEACHER_TP=1 \
+TRAIN_BATCH_SIZE=12 \
+PPO_MINI_BATCH_SIZE=12 \
+MAX_PROMPT_LENGTH=256 \
+MAX_RESPONSE_LENGTH=1024 \
+bash examples/on_policy_distillation_trainer/\
+run_qwen2_5_0_5b_megatron.sh
+```
+
+Treat these batch and sequence values as a safe starting point, not a portable
+performance claim. Re-tune them for the model pair, task-length distribution,
+and HBM capacity. A short probe can miss a later long-tail batch, so preserve
+memory headroom before committing to a long run.
 
 The vision-language recipe uses the official `k1` definition as a detached
 policy-gradient advantage:
@@ -214,8 +238,9 @@ environment is accepted for training.
   Pin and test the dependency instead of tracking its moving main branch.
 - The recipes cover TP only. Pipeline and expert parallelism are not part of
   this configuration.
-- A two-NPU one-step smoke validates connectivity but does not represent the
-  four-NPU steady-state performance target.
+- Two-NPU TP=1 and four-NPU TP=2 use different model-parallel topologies;
+  validate both independently instead of extrapolating throughput between
+  them.
 - Startup time includes Ray worker creation, model conversion, and optional NPU
   graph capture. Exclude it from steady-state throughput, but record it
   separately when operational startup time matters.
