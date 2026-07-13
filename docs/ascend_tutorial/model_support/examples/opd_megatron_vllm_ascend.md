@@ -156,8 +156,11 @@ Qwen3-VL full-parameter training uses Megatron's CPU optimizer by default when
 the student pool has one 64 GiB NPU. The default two-NPU topology assigns one
 NPU to the student/rollout pool and one to the teacher pool. The validated
 defaults use batch 12, prompt/response limits 1024/512, and a 4096-token
-dynamic microbatch budget. Treat them as starting points for short-form
-multimodal reasoning, not portable defaults for every dataset.
+dynamic microbatch budget. Rollout memory utilization defaults to 0.20 because
+0.25 exhausted physical HBM while waking rollout weights after several
+optimizer steps on the validated two-NPU setup. A ten-step probe at 0.20
+completed nine sleep/wake transitions. Treat these values as starting points
+for short-form multimodal reasoning, not portable defaults for every dataset.
 
 `OPTIMIZER_CPU_OFFLOAD=true` selects Megatron's CPU-resident optimizer and is
 the recipe default. It uses a full offload fraction with the precision-aware
@@ -228,7 +231,9 @@ warmup before comparing throughput.
    train batch size, so reducing it can remove an activation or logits peak
    without reducing rollout concurrency.
 5. Tune rollout and teacher memory utilization independently. Leave headroom
-   for weight synchronization and multimodal preprocessing.
+   for weight synchronization and multimodal preprocessing. Test enough steps
+   to exercise repeated rollout sleep/wake transitions; a probe that ends
+   immediately after an optimizer step can miss the next weight wake-up.
 6. Enable graph capture only after an eager run succeeds. Graph capture has a
    significant one-time startup cost and should not be included in steady-state
    throughput comparisons.
