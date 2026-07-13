@@ -11,8 +11,9 @@ with Megatron training and vLLM Ascend inference. The canonical recipes are:
   Qwen3-VL-8B-Instruct teacher on Geo3K.
 
 The recipes use tensor parallelism only. Their default single-node placement is
-two NPUs for the colocated student/rollout pool and two NPUs for the teacher
-pool. Both pools use TP=2 and PP=1.
+one NPU for the colocated student/rollout pool and one NPU for the teacher
+pool. Both pools use TP=1 and PP=1. A four-NPU TP=2+2 placement is documented
+as a supplementary topology below.
 
 ## Software compatibility
 
@@ -122,20 +123,17 @@ bash examples/on_policy_distillation_trainer/\
 run_qwen2_5_0_5b_megatron.sh
 ```
 
-The recipe defaults use four NPUs (two for student/rollout and two for the
-teacher, TP=2 in each pool). A two-NPU TP=1 topology is also supported and is
-useful when the two pools must use one NPU each:
+The recipe defaults use two NPUs (one for student/rollout and one for the
+teacher, TP=1 in each pool). The validated GSM8K defaults are batch 12, prompt
+256, and response 1024, so the basic launch above needs no topology overrides.
+To run the supplementary four-NPU topology, assign TP=2 to both pools:
 
 ```bash
-NGPUS_PER_NODE=1 \
-TEACHER_NGPUS_PER_NODE=1 \
-ACTOR_TP=1 \
-ROLLOUT_TP=1 \
-TEACHER_TP=1 \
-TRAIN_BATCH_SIZE=12 \
-PPO_MINI_BATCH_SIZE=12 \
-MAX_PROMPT_LENGTH=256 \
-MAX_RESPONSE_LENGTH=1024 \
+NGPUS_PER_NODE=2 \
+TEACHER_NGPUS_PER_NODE=2 \
+ACTOR_TP=2 \
+ROLLOUT_TP=2 \
+TEACHER_TP=2 \
 bash examples/on_policy_distillation_trainer/\
 run_qwen2_5_0_5b_megatron.sh
 ```
@@ -154,36 +152,30 @@ bash examples/on_policy_distillation_trainer/\
 run_qwen3_vl_4b_megatron.sh
 ```
 
-Qwen3-VL full-parameter training can use Megatron's CPU optimizer when the
-student pool has only one 64 GiB NPU. The following two-NPU topology assigns
-one NPU to the student/rollout pool and one to the teacher pool. Its sequence
-and token budgets are starting points for short-form multimodal reasoning, not
-portable defaults for every dataset:
+Qwen3-VL full-parameter training uses Megatron's CPU optimizer by default when
+the student pool has one 64 GiB NPU. The default two-NPU topology assigns one
+NPU to the student/rollout pool and one to the teacher pool. The validated
+defaults use batch 12, prompt/response limits 1024/512, and a 4096-token
+dynamic microbatch budget. Treat them as starting points for short-form
+multimodal reasoning, not portable defaults for every dataset.
 
-```bash
-NGPUS_PER_NODE=1 \
-TEACHER_NGPUS_PER_NODE=1 \
-ACTOR_TP=1 \
-ROLLOUT_TP=1 \
-TEACHER_TP=1 \
-TRAIN_BATCH_SIZE=12 \
-PPO_MINI_BATCH_SIZE=12 \
-MAX_PROMPT_LENGTH=512 \
-MAX_RESPONSE_LENGTH=512 \
-PPO_MAX_TOKEN_LEN_PER_GPU=4096 \
-ROLLOUT_GPU_MEMORY_UTILIZATION=0.25 \
-TEACHER_GPU_MEMORY_UTILIZATION=0.65 \
-OPTIMIZER_CPU_OFFLOAD=true \
-bash examples/on_policy_distillation_trainer/\
-run_qwen3_vl_4b_megatron.sh
-```
-
-`OPTIMIZER_CPU_OFFLOAD=true` selects Megatron's CPU-resident optimizer and
-defaults to a full offload fraction with the precision-aware optimizer. This
-still updates every model parameter; it changes optimizer-state placement,
-not the training scope. Override `OPTIMIZER_OFFLOAD_FRACTION` or
+`OPTIMIZER_CPU_OFFLOAD=true` selects Megatron's CPU-resident optimizer and is
+the recipe default. It uses a full offload fraction with the precision-aware
+optimizer. This still updates every model parameter; it changes optimizer-state
+placement, not the training scope. Override `OPTIMIZER_OFFLOAD_FRACTION` or
 `USE_PRECISION_AWARE_OPTIMIZER` only after validating the resulting optimizer
 state and memory use.
+
+The processor-expanded Geo3K prompts in the validated dataset reached 771
+tokens in train and 613 in test, so the 1024 prompt limit preserves every
+sample. Size multimodal prompts after image/video token expansion rather than
+from raw text alone. Unlike response clipping, truncating a multimodal prompt
+can break placeholder-to-feature alignment and should be treated as a
+configuration error.
+
+For the supplementary four-NPU topology, set both pools and all three TP values
+to two, as in the Qwen2.5 example above. Re-tune batch size, token budget, and
+CPU optimizer placement instead of assuming the two-NPU settings are optimal.
 
 This optimizer setting is different from
 `actor_rollout_ref.actor.megatron.optimizer_offload`. The latter moves
@@ -191,8 +183,10 @@ already-created optimizer state between worker stages, but it cannot prevent
 the first optimizer step from allocating Adam state on the NPU. Use the CPU
 optimizer when that initial allocation is the memory bottleneck.
 
-Both recipes run 100 optimizer steps by default. Override paths and batch
-sizes with environment variables rather than editing the scripts:
+Both recipes run 100 optimizer steps and disable periodic validation by default
+so the reported step time covers training only. Set `TEST_FREQ` to a positive
+value when validation is required. Override paths and batch sizes with
+environment variables rather than editing the scripts:
 
 ```bash
 STUDENT_MODEL=/models/student \
@@ -223,8 +217,8 @@ temporary directory, model caches, checkpoints, and logs on persistent storage.
 Tune one dimension at a time and retain at least ten steady-state steps after
 warmup before comparing throughput.
 
-1. Confirm that the actor, rollout, and teacher pools use all four NPUs and
-   that no worker is placed on the wrong pool.
+1. Confirm that the actor, rollout, and teacher pools use the selected NPU
+   topology and that no worker is placed on the wrong pool.
 2. Increase `TRAIN_BATCH_SIZE` until generation is continuously batched.
 3. Increase `PPO_MINI_BATCH_SIZE` while keeping it no larger than the train
    batch size.
