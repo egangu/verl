@@ -1,11 +1,13 @@
 # On-policy distillation with Megatron and vLLM Ascend
 
+Last updated: 07/13/2026.
+
 This guide covers full-parameter on-policy distillation (OPD) on Ascend NPUs
 with Megatron training and vLLM Ascend inference. The canonical recipes are:
 
-- `run_qwen2_5_0_5b_megatron_vllm_ascend.sh`: Qwen2.5-0.5B student and
+- `run_qwen2_5_0_5b_megatron.sh`: Qwen2.5-0.5B student and
   Qwen2.5-3B-Instruct teacher on GSM8K.
-- `run_qwen3_vl_4b_megatron_vllm_ascend.sh`: Qwen3-VL-4B-Instruct student and
+- `run_qwen3_vl_4b_megatron.sh`: Qwen3-VL-4B-Instruct student and
   Qwen3-VL-8B-Instruct teacher on Geo3K.
 
 The recipes use tensor parallelism only. Their default single-node placement is
@@ -54,9 +56,15 @@ python examples/data_preprocess/gsm8k.py \
   --local_save_dir "$HOME/data/gsm8k"
 ```
 
-Prepare Geo3K with the multimodal preprocessing utility used by the canonical
-Qwen3-VL examples. The resulting parquet files must contain the `images`
-column, and the referenced image paths must be visible from every Ray worker.
+Prepare Geo3K with the repository utility:
+
+```bash
+python examples/data_preprocess/geo3k.py \
+  --local_save_dir "$HOME/data/geo3k"
+```
+
+The resulting parquet files must contain the `images` column, and the
+referenced image paths must be visible from every Ray worker.
 
 Hugging Face model IDs are the defaults. For an offline cluster, set
 `STUDENT_MODEL` and `TEACHER_MODEL` to local snapshot directories. ModelScope
@@ -72,7 +80,7 @@ term:
 ```bash
 ray stop --force
 bash examples/on_policy_distillation_trainer/\
-run_qwen2_5_0_5b_megatron_vllm_ascend.sh
+run_qwen2_5_0_5b_megatron.sh
 ```
 
 The vision-language recipe uses the official `k1` definition as a detached
@@ -81,7 +89,7 @@ policy-gradient advantage:
 ```bash
 ray stop --force
 bash examples/on_policy_distillation_trainer/\
-run_qwen3_vl_4b_megatron_vllm_ascend.sh
+run_qwen3_vl_4b_megatron.sh
 ```
 
 Both recipes run 100 optimizer steps by default. Override paths and batch
@@ -95,7 +103,7 @@ VAL_FILE=/data/test.parquet \
 TRAIN_BATCH_SIZE=64 \
 PPO_MINI_BATCH_SIZE=64 \
 bash examples/on_policy_distillation_trainer/\
-run_qwen2_5_0_5b_megatron_vllm_ascend.sh
+run_qwen2_5_0_5b_megatron.sh
 ```
 
 For long runs, launch in a persistent terminal such as tmux and keep Ray's
@@ -130,7 +138,9 @@ sum(prompt tokens + generated response tokens across the global batch)
 Use the trainer's `perf/total_num_tokens` and `perf/time_per_step` metrics. This
 definition includes rollout, teacher inference, log-probability computation,
 Megatron forward/backward, optimizer update, and weight synchronization. Do not
-report vLLM decode-only throughput as the end-to-end result.
+report vLLM decode-only throughput as the end-to-end result. The trainer's
+`perf/throughput` metric is normalized per accelerator, so calculate the ratio
+above explicitly when reporting global throughput.
 
 ## Correctness checks
 
@@ -139,8 +149,9 @@ Before a long run:
 - run a one-step eager smoke test;
 - confirm finite distillation loss and gradient norm;
 - check that `training/global_step` advances exactly once per optimizer step;
-- verify that student and teacher tokenizers use the same vocabulary and chat
-  template for top-k distillation;
+- verify that student and teacher tokenizers map the same token IDs to the same
+  vocabulary entries; different chat templates are acceptable because the
+  teacher scores the student-rendered token sequence directly;
 - for Qwen3-VL, inspect several decoded samples to confirm that images are
   loaded and visual tokens are present;
 - compare a short fixed batch before and after any performance-only change.

@@ -10,8 +10,8 @@ This trainer jointly trains a student model with policy-gradient on-policy rollo
 | `run_qwen3_8b_megatron.sh`      | single   | text       | vLLM  | Megatron | NVIDIA   |
 | `run_qwen3_vl_8b_fsdp.sh`       | single   | VL         | vLLM  | FSDP     | NVIDIA   |
 | `run_qwen3_8b_mopd_fsdp.sh`     | multi    | text + VL  | vLLM  | FSDP     | NVIDIA   |
-| `run_qwen2_5_0_5b_megatron_vllm_ascend.sh` | single | text | vLLM | Megatron | Ascend NPU |
-| `run_qwen3_vl_4b_megatron_vllm_ascend.sh` | single | VL | vLLM | Megatron | Ascend NPU |
+| `run_qwen2_5_0_5b_megatron.sh` | single | text | vLLM | Megatron | Ascend NPU |
+| `run_qwen3_vl_4b_megatron.sh` | single | VL | vLLM | Megatron | Ascend NPU |
 
 Override `STUDENT_MODEL` and `TEACHER_MODEL` via env vars to swap model pairs in
 the single-teacher scripts. The MOPD script exposes per-teacher overrides.
