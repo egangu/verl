@@ -704,6 +704,11 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             return
 
         set_expandable_segments(False)
+        # Return cached trainer pages before the rollout process restores its
+        # weights. Otherwise colocated allocators can exhaust physical memory
+        # even when the trainer no longer owns live tensors for those pages.
+        if self.config.rollout.free_cache_engine:
+            aggressive_empty_cache(force_sync=True)
         log_gpu_memory_usage("Before resume weights", logger=logger)
 
         # 1. resume rollout memory (weights were released during sleep)

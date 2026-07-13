@@ -162,6 +162,13 @@ optimizer steps on the validated two-NPU setup. A ten-step probe at 0.20
 completed nine sleep/wake transitions. Treat these values as starting points
 for short-form multimodal reasoning, not portable defaults for every dataset.
 
+With colocated Megatron training and vLLM rollout, the trainer returns cached
+allocator pages immediately before vLLM restores sleeping weights. This
+handoff is required even when the trainer has no live tensors in those cached
+pages: otherwise the rollout process can fail its physical-memory allocation
+after an optimizer step. A probe must include the rollout wake-up for the next
+step; ending exactly after an optimizer step does not exercise this boundary.
+
 `OPTIMIZER_CPU_OFFLOAD=true` selects Megatron's CPU-resident optimizer and is
 the recipe default. It uses a full offload fraction with the precision-aware
 optimizer. This still updates every model parameter; it changes optimizer-state
