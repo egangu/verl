@@ -20,6 +20,32 @@ Start from an Ascend image whose CANN, PyTorch, torch-npu, vLLM, and
 vLLM Ascend versions are mutually compatible. Do not install a CUDA-focused
 verl image on top of an Ascend runtime.
 
+Load both the CANN and NNAL/ATB runtime environments before starting Ray or
+vLLM Ascend. Loading CANN alone is insufficient: the vLLM worker fails while
+registering its ATB extensions when `libatb.so` is not on the library path.
+For the standard Ascend installation layout, run:
+
+```bash
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
+source /usr/local/Ascend/nnal/atb/set_env.sh
+```
+
+Launch wrappers that enable Bash `nounset` (`set -u`) may need to disable it
+temporarily while sourcing vendor environment scripts, then enable it again.
+Verify the runtime before allocating NPUs:
+
+```bash
+python - <<'PY'
+import ctypes
+
+ctypes.CDLL("libatb.so")
+from torch_npu.op_plugin.atb._atb_ops import _register_atb_extensions
+
+_register_atb_extensions()
+print("ATB runtime is ready")
+PY
+```
+
 For CANN 9.0, the Ascend Dockerfiles in this repository use MindSpeed and
 Megatron Core from their `core_r0.16.0` branches. Keep those two dependencies
 on the same Megatron Core line. The legacy mbridge backend is selected because
