@@ -155,7 +155,7 @@ run_qwen3_vl_4b_megatron.sh
 Qwen3-VL full-parameter training uses Megatron's CPU optimizer by default when
 the student pool has one 64 GiB NPU. The default two-NPU topology assigns one
 NPU to the student/rollout pool and one to the teacher pool. The validated
-defaults use batch 12, prompt/response limits 1024/512, and a 4096-token
+defaults use batch 12, prompt/response limits 1024/1024, and a 4096-token
 dynamic microbatch budget. Rollout memory utilization defaults to 0.20 because
 0.25 exhausted physical HBM while waking rollout weights after several
 optimizer steps on the validated two-NPU setup. A ten-step probe at 0.20
@@ -182,6 +182,13 @@ sample. Size multimodal prompts after image/video token expansion rather than
 from raw text alone. Unlike response clipping, truncating a multimodal prompt
 can break placeholder-to-feature alignment and should be treated as a
 configuration error.
+
+For Geo3K, a deterministic 601-sample checkpoint comparison found that a
+512-token response limit allowed later checkpoints to drift below the initial
+student, while changing only the response limit to 1024 recovered the loss.
+The 1024-token recipe default is therefore a quality setting, not a requirement
+of the OPD loss. A 512-token limit remains a valid memory-constrained fallback,
+but compare fixed checkpoint evaluations before adopting it for a long run.
 
 For the supplementary four-NPU topology, set both pools and all three TP values
 to two, as in the Qwen2.5 example above. Re-tune batch size, token budget, and
@@ -215,9 +222,9 @@ supplies token-level supervision on the retained response prefix, and short
 mathematical tasks can often use a shorter limit than open-ended generation.
 Record the ratio and inspect clipped samples. A base student that repeats until
 the limit is different from a dataset whose valid answers genuinely require
-more context. Increase the limit only when the retained prefix omits useful
-task reasoning; otherwise prefer the shorter setting when it improves memory
-headroom and end-to-end throughput.
+more context. Compare fixed downstream evaluations when changing the limit;
+use a shorter setting for memory headroom and throughput only when it does not
+degrade the selected checkpoint.
 
 For long runs, launch in a persistent terminal such as tmux and keep Ray's
 temporary directory, model caches, checkpoints, and logs on persistent storage.
