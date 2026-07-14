@@ -98,6 +98,22 @@ def apply_greedy_sampling_params(params: dict[str, Any]) -> None:
     params["temperature"] = 0
 
 
+def build_validation_uids(batch_dict: dict[str, Any], uid_key: Optional[str] = None) -> np.ndarray:
+    """Build validation UIDs, optionally from a stable dataset field."""
+    if uid_key is None:
+        return np.array([str(uuid.uuid4()) for _ in range(len(batch_dict["raw_prompt"]))], dtype=object)
+
+    if uid_key not in batch_dict:
+        raise KeyError(f"Validation UID key {uid_key!r} is not present in the validation batch")
+    values = batch_dict[uid_key]
+    if len(values) != len(batch_dict["raw_prompt"]):
+        raise ValueError(
+            f"Validation UID field {uid_key!r} has {len(values)} values for "
+            f"{len(batch_dict['raw_prompt'])} prompts"
+        )
+    return np.array([f"{uid_key}:{value}" for value in values], dtype=object)
+
+
 logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "INFO"))
 
@@ -797,8 +813,8 @@ class PPOTrainer(ABC):
 
         for batch_dict in self.val_dataloader:
             # 1. put batch to agent loop manager
-            batch_dict["uid"] = np.array(
-                [str(uuid.uuid4()) for _ in range(len(batch_dict["raw_prompt"]))], dtype=object
+            batch_dict["uid"] = build_validation_uids(
+                batch_dict, uid_key=self.config.trainer.get("validation_uid_key", None)
             )
             batch = tu.get_tensordict(batch_dict)
             tu.assign_non_tensor_data(batch, "global_steps", self.global_steps)
