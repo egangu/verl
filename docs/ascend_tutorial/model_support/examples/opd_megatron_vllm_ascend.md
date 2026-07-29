@@ -1,6 +1,6 @@
 # On-policy distillation with Megatron and vLLM Ascend
 
-Last updated: 07/14/2026.
+Last updated: 07/29/2026.
 
 This guide covers full-parameter on-policy distillation (OPD) on Ascend NPUs
 with Megatron training and vLLM Ascend inference. The canonical recipes are:
@@ -58,6 +58,29 @@ _register_atb_extensions()
 print("ATB runtime is ready")
 PY
 ```
+
+The four-NPU TP=2+2 acceptance run used the following CANN 9.0 stack. Pin
+source revisions as well as package versions when reproducing it; a moving
+release branch can change without changing the displayed package version.
+
+| Component | Validated version or revision |
+| --- | --- |
+| Python | 3.11.15 |
+| PyTorch / torch-npu | 2.9.0 / 2.9.0 |
+| vLLM | 0.18.0 (`bcf2be96120005e9aea171927f85055a6a5c0cf6`) |
+| vLLM Ascend | 0.18.0 (`a43c8cc8057f490ed1df2c6ed66253e2d7817da4`) |
+| triton-ascend | 3.2.1 |
+| Ray | 2.56.1 |
+| transformers | `cc7ab9be508ce6ed3637bba9e50367b29b742dc6` |
+| Megatron Core | `core_r0.16.0` (`ddc0d6774783b032ddceacc5714e653651daecb9`) |
+| MindSpeed | `core_r0.16.0` (`0bda3e134e1d8185b229d201b030757cdcb3ac36`) |
+| mbridge | `a61943d7fcb34a190471cfeb0a0eb8bbda621ddf` |
+
+CANN 9.0 requires triton-ascend 3.2.1 for this vLLM Ascend line. A 3.2.0
+installation can import successfully but is not a valid substitute: it has
+known compiler issues and an API enum mismatch in this stack. Confirm the
+installed distribution with `pip show triton-ascend` rather than relying on a
+transitive dependency declaration.
 
 For CANN 9.0, the Ascend Dockerfiles in this repository use MindSpeed and
 Megatron Core from their `core_r0.16.0` branches. Keep those two dependencies
