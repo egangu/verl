@@ -139,6 +139,10 @@ trainer:
   # Directory for logging validation data; no dump if null
   validation_data_dir: null
 
+  # Optional validation batch field used to build stable sample UIDs. If null,
+  # random UUIDs are generated. The field must exist for every validation sample.
+  validation_uid_key: null
+
   # Number of nodes used in the training
   nnodes: 1
 

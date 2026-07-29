@@ -108,8 +108,7 @@ def build_validation_uids(batch_dict: dict[str, Any], uid_key: Optional[str] = N
     values = batch_dict[uid_key]
     if len(values) != len(batch_dict["raw_prompt"]):
         raise ValueError(
-            f"Validation UID field {uid_key!r} has {len(values)} values for "
-            f"{len(batch_dict['raw_prompt'])} prompts"
+            f"Validation UID field {uid_key!r} has {len(values)} values for {len(batch_dict['raw_prompt'])} prompts"
         )
     return np.array([f"{uid_key}:{value}" for value in values], dtype=object)
 

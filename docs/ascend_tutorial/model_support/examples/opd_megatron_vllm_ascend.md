@@ -281,6 +281,12 @@ Before a long run:
   loaded and visual tokens are present;
 - compare a short fixed batch before and after any performance-only change.
 
+For reproducible checkpoint comparisons, add a stable sample identifier to the
+validation parquet and set `trainer.validation_uid_key` to that column name.
+The field must be present for every validation sample. Leave the option unset
+to retain the default random UUID behavior. Stable UIDs make independently
+generated validation dumps joinable without changing sampling or scoring.
+
 The Megatron `forward_kl_topk` implementation is vocabulary-parallel. Its loss
 and gradients should match the full-vocabulary reference under TP before an
 environment is accepted for training.
