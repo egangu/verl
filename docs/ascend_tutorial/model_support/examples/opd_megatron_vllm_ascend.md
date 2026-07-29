@@ -293,6 +293,32 @@ report vLLM decode-only throughput as the end-to-end result. The trainer's
 `perf/throughput` metric is normalized per accelerator, so calculate the ratio
 above explicitly when reporting global throughput.
 
+## Validated four-NPU reference
+
+On four Ascend 910B3 NPUs with the pinned CANN 9.0 environment above, the
+Qwen2.5 recipe completed 100 full-parameter optimizer steps with student TP=2,
+teacher TP=2, global batch 24, and a 1024-token response limit. Mean
+end-to-end global throughput was 223.41 token/s after excluding step 1 and the
+step 50/100 checkpoint-save steps. The first/last ten-step mean reward changed
+from 0.00833 to 0.16667, and the corresponding distillation loss changed from
+0.54703 to 0.27079. A fixed greedy GSM8K evaluation improved from 8/1319
+(0.61%) at step 0 to 373/1319 (28.28%) at step 100.
+
+The Qwen3-VL recipe completed the same 100-step, full-parameter gate with
+student TP=2, teacher TP=2, global batch 12, and 1024-token prompt and response
+limits. Mean end-to-end global throughput was 115.25 token/s after excluding
+step 1 and the step 20/40/60/80/100 checkpoint-save steps. The first/last
+ten-step mean reward changed from 0.21750 to 0.31500, while distillation loss
+changed from 0.15681 to 0.11368. All five checkpoints passed model, optimizer,
+and extra-state integrity checks.
+
+Treat these numbers as a reproducibility reference rather than a portable
+hardware benchmark. Report the exact model and data revisions, batch and token
+limits, excluded steps, and checkpoint-evaluation settings with every result.
+Warnings or exceptions emitted only after 100% training progress and complete
+checkpoint creation should be recorded separately as teardown behavior; they
+must not be silently grouped with training-phase failures.
+
 ## Correctness checks
 
 Before a long run:
