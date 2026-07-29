@@ -80,7 +80,10 @@ CANN 9.0 requires triton-ascend 3.2.1 for this vLLM Ascend line. A 3.2.0
 installation can import successfully but is not a valid substitute: it has
 known compiler issues and an API enum mismatch in this stack. Confirm the
 installed distribution with `pip show triton-ascend` rather than relying on a
-transitive dependency declaration.
+transitive dependency declaration. The validated 3.2.1 distribution still
+reports `triton.__version__ == "3.2.0"`, so libraries that inspect the module
+attribute can emit a stale-version warning even though the installed wheel is
+the required 3.2.1 build.
 
 For CANN 9.0, the Ascend Dockerfiles in this repository use MindSpeed and
 Megatron Core from their `core_r0.16.0` branches. Keep those two dependencies
