@@ -908,11 +908,9 @@ def contiguous(data: TensorDict) -> TensorDict:
 
 
 def maybe_fix_3d_position_ids(data: TensorDict):
-    # TensorDict pickle/unpickle can rebuild VLM position IDs with the image/MRoPE
-    # axis as jagged: [batch, j4, sequence]. Merely overwriting _ragged_idx leaves
-    # the internal values/offsets inconsistent and later makes unbind split the
-    # sequence dimension with image-axis lengths. Rebuild the NestedTensor so the
-    # variable sequence dimension is genuinely jagged: [batch, 4, jsequence].
+    # TensorDict serialization can reset the jagged dimension to 1 while retaining
+    # values/offsets for dimension 2. Rebuild directly: unbind() on the malformed
+    # tensor would split the MRoPE axis using sequence lengths and fail.
     if "position_ids" not in data.keys():
         return
 
@@ -920,7 +918,9 @@ def maybe_fix_3d_position_ids(data: TensorDict):
     if position_ids.dim() != 3 or not position_ids.is_nested or getattr(position_ids, "_ragged_idx", None) == 2:
         return
 
-    data["position_ids"] = nested_tensor_from_tensor_list(list(position_ids.unbind()), ragged_idx=2)
+    data["position_ids"] = torch.nested.nested_tensor_from_jagged(
+        position_ids.values(), offsets=position_ids.offsets(), lengths=position_ids.lengths(), jagged_dim=2
+    )
 
 
 def list_of_dict_to_tensordict(list_of_dicts: list[dict[str, Any]]) -> TensorDict:
