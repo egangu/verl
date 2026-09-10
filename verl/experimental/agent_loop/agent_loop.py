@@ -45,12 +45,12 @@ from pydantic import BaseModel, ConfigDict
 from tensordict import TensorDict
 from transformers import AutoProcessor, AutoTokenizer
 
-from verl.experimental.agent_loop.utils import resolve_config_path
 from verl.protocol import DataProto
 from verl.tools.tool_registry import load_all_tools
 from verl.trainer.distillation import is_distillation_enabled
 from verl.utils.config import omega_conf_to_dataclass
 from verl.utils.dataset.rl_dataset import RLHFDataset, get_dataset_class
+from verl.utils.import_utils import resolve_config_path
 from verl.utils.model import compute_position_id_with_mask
 from verl.utils.profiler import simple_timer
 from verl.utils.ray_utils import auto_await, get_event_loop
@@ -144,9 +144,12 @@ class AgentLoopOutput(BaseModel):
             rm_scores[-1] = reward_score
             output["rm_scores"] = rm_scores
 
+        # Mutating a default dict does not add the field to Pydantic's fields-set,
+        # so model_dump(exclude_unset=True) can omit populated extra fields.
+        extra_fields = output.setdefault("extra_fields", self.extra_fields.copy())
         teacher_ids, teacher_logprobs = (
-            output["extra_fields"].pop("teacher_ids", None),
-            output["extra_fields"].pop("teacher_logprobs", None),
+            extra_fields.pop("teacher_ids", None),
+            extra_fields.pop("teacher_logprobs", None),
         )
         if teacher_ids is not None:
             output["teacher_ids"] = teacher_ids
@@ -353,7 +356,7 @@ class AgentLoopBase(ABC):
             )
         return self._cap_text_prompt_length(prompt_ids)
 
-    async def ct_merge_non_assistant_msg(
+    async def ct_merge_context_msg(
         self,
         previous_messages: list[dict],
         updated_messages: list[dict],
@@ -362,10 +365,10 @@ class AgentLoopBase(ABC):
         response_logprobs: Optional[list[float]] = None,
         tools: list[dict] = None,
     ):
-        """Merge appended non-assistant messages into runtime tokens and metadata."""
+        """Merge appended context messages into runtime tokens and metadata."""
         merge_result = await self.loop.run_in_executor(
             None,
-            lambda: self.continuous_token_builder.merge_non_assistant_tokens(
+            lambda: self.continuous_token_builder.merge_context_tokens(
                 previous_messages,
                 updated_messages,
                 runtime_token_ids,

@@ -60,6 +60,11 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # This image is not the uv.cu130 one: it ships its own torch-npu stack, so the
+  # shared e2e scripts must launch with ambient python instead of `uv run`.
+  VERL_USE_UV: 0
+
 jobs:
   e2e_v1_separate_async_fsdp2_ascend:
     if: github.repository_owner == 'verl-project'
@@ -126,7 +131,6 @@ jobs:
       HF_ENDPOINT: "https://hf-mirror.com"
       HF_HUB_ENABLE_HF_TRANSFER: "0"
       ACTOR_STRATEGY: "megatron"
-      VANILLA_MBRIDGE: "True"
       device_name: "npu"
       UV_EXTRA_INDEX_URL: "https://repo.huaweicloud.com/ascend/repos/pypi"
       UV_INDEX_STRATEGY: unsafe-best-match

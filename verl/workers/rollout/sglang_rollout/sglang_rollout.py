@@ -41,6 +41,7 @@ from verl.workers.config import HFModelConfig, RolloutConfig
 from verl.workers.rollout.base import BaseRollout
 from verl.workers.rollout.sglang_rollout.http_server_engine import AsyncHttpServerAdapter
 from verl.workers.rollout.sglang_rollout.utils import (
+    DEEPSEEK_V4_FUSION_GROUPS,
     SGLANG_LORA_NAME,
     get_named_tensor_buckets,
     lora_served_as_adapter,
@@ -368,7 +369,14 @@ class ServerAdapter(BaseRollout):
             else:
                 weights = weights
 
-            async for params_batch in get_named_tensor_buckets(weights, update_weights_bucket_bytes):
+            fusion_groups = (
+                DEEPSEEK_V4_FUSION_GROUPS
+                if getattr(self.model_config.hf_config, "model_type", None) == "deepseek_v4"
+                else ()
+            )
+            async for params_batch in get_named_tensor_buckets(
+                weights, update_weights_bucket_bytes, fusion_groups=fusion_groups
+            ):
                 await sgl_update_weights(
                     engine=self._engine,
                     params_batch=[(_strip_lora_base_layer(name), _to_ipc_device(t)) for name, t in params_batch],
@@ -414,9 +422,13 @@ class ServerAdapter(BaseRollout):
         """
         import torch.distributed as dist
         from sglang.srt.managers.io_struct import UpdateWeightsFromTensorReqInput
-        from sglang.srt.model_executor.model_runner import LocalSerializedTensor
         from sglang.srt.utils import MultiprocessingSerializer
         from sglang.srt.utils.patch_torch import monkey_patch_torch_reductions
+
+        try:
+            from sglang.srt.model_executor.model_runner import LocalSerializedTensor
+        except ImportError:  # moved out of model_runner in sglang 0.5.16
+            from sglang.srt.model_executor.model_runner_components.weight_updater import LocalSerializedTensor
 
         from verl.workers.rollout.sglang_rollout.delta_loader import LOADER_FQN
 

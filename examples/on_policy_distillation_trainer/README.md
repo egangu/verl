@@ -22,7 +22,7 @@ Geo3K calibration pair: a Qwen3-VL-2B student with a Qwen3-VL-4B teacher,
 2048-token responses, top-k 64, and no task reward. Hardware-specific resource
 and memory defaults are selected inside the scripts.
 
-See the [Ascend Megatron + vLLM OPD guide](../../docs/ascend_tutorial/model_support/examples/opd_megatron_vllm_ascend.md)
+See the [Ascend Megatron + vLLM OPD guide](../../docs/ascend_tutorial/zh/model_support/examples/opd_megatron_vllm_ascend.md)
 for dependency compatibility, four-NPU placement, validation, and tuning.
 
 ## Key Flags

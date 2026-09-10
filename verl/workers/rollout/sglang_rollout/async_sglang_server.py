@@ -46,7 +46,12 @@ from verl.plugin.platform import get_platform
 from verl.utils.config import omega_conf_to_dataclass
 from verl.utils.device import get_visible_devices_keyword
 from verl.utils.net_utils import get_free_port, is_valid_ipv6_address
-from verl.utils.profiler import DistProfiler, build_sglang_profiler_args
+from verl.utils.profiler import (
+    build_rollout_dist_profiler,
+    build_sglang_profiler_args,
+    relocate_rollout_traces,
+    rollout_profiler_global_ranks,
+)
 from verl.utils.tracking import RLInsightLogger
 from verl.workers.config import HFModelConfig, RolloutConfig
 from verl.workers.rollout.replica import RolloutMode, RolloutReplica, TokenOutput
@@ -181,10 +186,6 @@ class SGLangHttpServer:
         self._pd_decode_peers: list[ActorHandle] = []
         self._pd_bootstrap_host: Optional[str] = None
 
-        if self.rollout_mode != RolloutMode.HYBRID and self.config.load_format == "dummy":
-            logger.warning(f"rollout mode is {self.rollout_mode}, load_format is dummy, set to auto")
-            self.config.load_format = "auto"
-
         # used for http server
         self._server_address = ray.util.get_node_ip_address().strip("[]")
         self._server_port = None
@@ -198,7 +199,20 @@ class SGLangHttpServer:
             else:
                 logger.warning(f"agent loop only support torch and npu profiler, got {profiler_config.tool}")
                 profiler_config = None
-        self.profiler_controller = DistProfiler(self.replica_rank, config=profiler_config, tool_config=tool_config)
+        # `ranks` in the rollout profiler config are global GPU ranks (as in the training roles);
+        # map them to the replica that owns them so e.g. ranks=[0, 8] with tp=8 profiles the replicas
+        # holding global ranks 0 and 8 (replicas 0 and 1), not replica indices 0 and 8.
+        self.replica_world_size = (
+            self.config.tensor_model_parallel_size
+            * self.config.data_parallel_size
+            * self.config.pipeline_model_parallel_size
+        )
+        self.profiler_controller = build_rollout_dist_profiler(
+            self.replica_rank, self.replica_world_size, config=profiler_config, tool_config=tool_config
+        )
+        # A tp>1 engine profiles its whole replica, but the user asked for specific global GPU ranks;
+        # keep only those when relocating so ranks=[0, 8] yields exactly GPU 0 and 8, not their tp-mates.
+        self.profiler_keep_global_ranks = rollout_profiler_global_ranks(profiler_config)
 
         # For multi-node, we need dist_init_addr so nodes can coordinate NCCL init.
         # For single-node, let SGLang handle port selection internally via nccl_port,
@@ -745,6 +759,16 @@ class SGLangHttpServer:
             if tokenizer_manager is None:
                 return
             await tokenizer_manager.stop_profile()
+            # Relocate the engine's traces into save_path (when relocate_results is set) so the
+            # training worker's single end-of-run upload of the whole save_path picks them up. The
+            # rollout engine does not run the finish command itself: it shares save_path with the
+            # colocated training worker, so uploading here too would send the same directory twice.
+            relocate_rollout_traces(
+                self.profiler_controller.config,
+                self.replica_rank,
+                self.replica_world_size,
+                self.profiler_keep_global_ranks,
+            )
 
 
 class SGLangReplica(RolloutReplica):
